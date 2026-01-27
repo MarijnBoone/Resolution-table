@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resolution Calculator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+
+    <div class="container">
+        <!-- Calculator Section -->
+        <div class="card">
+            <div class="header-row">
+                <h1>Resolution Calculator</h1>
+                <button id="btnSettings" class="icon-button" title="Settings">⚙️</button>
+            </div>
+
+            <div class="form-group">
+                <label for="systemSelect">System</label>
+                <select id="systemSelect">
+                    <!-- Populated by JS -->
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group half">
+                    <label for="detectorMode">Detector Mode</label>
+                    <select id="detectorMode">
+                        <!-- Populated based on System -->
+                    </select>
+                </div>
+                <div class="form-group half">
+                    <label for="binningMode">Binning</label>
+                    <select id="binningMode">
+                        <option value="1">Bin 1 (1x1)</option>
+                        <option value="2">Bin 2 (2x2)</option>
+                        <option value="3">Bin 3 (3x3)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="tilingMode">
+                <label for="tilingMode">Enable Tiling (Virtual FOV increase)</label>
+            </div>
+
+            <div class="form-group">
+                <label for="sod">SOD (Source Object Distance) [mm]</label>
+                <div class="slider-container">
+                    <input type="range" id="sod" step="1">
+                    <span id="sodValue" class="range-value">100</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="sdd">SDD (Source Detector Distance) [mm]</label>
+                <div class="slider-container">
+                    <input type="range" id="sdd" step="1">
+                    <span id="sddValue" class="range-value">970</span>
+                </div>
+                <div id="sddConstraintMsg" class="warning-msg" style="display: none;">
+                    SDD constrained by object diameter.
+                </div>
+            </div>
+
+            <div class="results-grid">
+                <div class="result-item">
+                    <span class="result-label">Max Diameter</span>
+                    <span id="resMaxDiameter" class="result-value">0</span><span class="unit">mm</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">Voxel Size</span>
+                    <span id="resVoxelSize" class="result-value">0</span><span class="unit">µm</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">FOV</span>
+                    <span id="resFOV" class="result-value">0</span><span class="unit">mm</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">Magnification</span>
+                    <span id="resMag" class="result-value">0</span><span class="unit">x</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">RAW Data</span>
+                    <span id="resRawData" class="result-value">0</span><span class="unit">GB</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table Generator Section -->
+        <div class="card">
+            <h1>Resolution Table</h1>
+
+            <div class="table-controls">
+                <div class="form-group compact">
+                    <label for="tableMinSOD">Min SOD</label>
+                    <input type="number" id="tableMinSOD" value="10" min="1">
+                </div>
+                <div class="form-group compact">
+                    <label for="tableMaxSOD">Max SOD</label>
+                    <input type="number" id="tableMaxSOD" value="300">
+                </div>
+                <div class="form-group compact">
+                    <label for="tableStepSOD">Step (mm)</label>
+                    <input type="number" id="tableStepSOD" value="10">
+                </div>
+                <button id="btnGenerate">Generate</button>
+                <div class="view-controls">
+                    <button id="btnViewTable" class="icon-button active" title="Table View">📄</button>
+                    <button id="btnViewGraph" class="icon-button" title="Graph View">📈</button>
+                </div>
+                <button id="btnExportCSV" title="Export CSV">Export CSV</button>
+            </div>
+
+            <div id="tableView" class="table-wrapper">
+                <table id="resolutionTable">
+                    <thead>
+                        <tr>
+                            <th>SOD (mm)</th>
+                            <th>Maximum diameter (mm)</th>
+                            <th>Voxel size (µm)</th>
+                            <th>FOV (mm)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Generated rows -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="graphView" class="graph-wrapper" style="display: none;">
+                <canvas id="resolutionChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>System Settings</h2>
+            <div class="form-group">
+                <label for="setFOD">FOD (Focal Object Distance) [mm]</label>
+                <input type="number" id="setFOD" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="setSpotSize">Spot Size [µm]</label>
+                <input type="number" id="setSpotSize" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="setSafety">Safety Range [mm]</label>
+                <input type="number" id="setSafety" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="setMinSDD">Min SDD [mm]</label>
+                <input type="number" id="setMinSDD" step="1">
+            </div>
+            <div class="form-group">
+                <label for="setMaxSDD">Max SDD [mm]</label>
+                <input type="number" id="setMaxSDD" step="1">
+            </div>
+            <div class="form-group">
+                <label for="setMinSOD">Min SOD [mm]</label>
+                <input type="number" id="setMinSOD" step="1">
+            </div>
+            <div class="form-group">
+                <label for="setMaxSOD">Max SOD [mm]</label>
+                <input type="number" id="setMaxSOD" step="1">
+            </div>
+
+            <h3>Detector Settings</h3>
+            <div id="detectorSettingsContainer">
+                <!-- Dynamically populated -->
+            </div>
+
+            <button id="btnSaveSettings">Save Changes</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
