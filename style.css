@@ -12,6 +12,35 @@
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+.logo-container {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.logo {
+  height: 48px;
+  width: auto;
+  display: block;
+  pointer-events: auto;
+}
+
+@media (max-width: 600px) {
+  .logo-container {
+    position: static;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: center;
+  }
+
+  body {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
 body {
   margin: 0;
   font-family: var(--font-family);

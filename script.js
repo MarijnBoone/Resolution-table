@@ -38,8 +38,32 @@ const SYSTEMS = {
                 tilingFactor: 1.98
             }
         }
-    }
+    },
     // Future systems can be added here
+    "DynaTOM": {
+        name: "DynaTOM",
+        FOD: 14,
+        SPOT_SIZE: 3, // Not specified, assuming 0 or irrelevant? Usually small.
+        SAFETY: 1, // Not specified, assuming 0 or irrelevant.
+        MIN_SDD: 0, // Ignored in ODD mode
+        MAX_SDD: 2000, // Ignored
+        MIN_SOD: 15,
+        MAX_SOD: 388,
+        MIN_ODD: 117,
+        MAX_ODD: 580,
+        inputMode: "ODD", // Special mode
+        detectors: {
+            "HighSpeed": {
+                name: "High Speed (1936 x 1528)",
+                pixelH: 1936,
+                pixelV: 1528,
+                sizeH: 1936 * 0.0748, // Calc from pixel size?
+                sizeV: 1528 * 0.0748,
+                pixelSize: 0.0748,
+                tilingFactor: 1.98
+            }
+        }
+    }
 };
 
 // Current State
@@ -58,7 +82,13 @@ const elSod = document.getElementById('sod');
 const elSodVal = document.getElementById('sodValue');
 const elSdd = document.getElementById('sdd');
 const elSddVal = document.getElementById('sddValue');
+
 const elSddMsg = document.getElementById('sddConstraintMsg');
+const elGroupSdd = document.getElementById('sdd').closest('.form-group'); // Get container
+
+const elGroupOdd = document.getElementById('groupODD');
+const elOdd = document.getElementById('odd');
+const elOddVal = document.getElementById('oddValue');
 
 const elDisplayMaxDia = document.getElementById('resMaxDiameter');
 const elDisplayVoxel = document.getElementById('resVoxelSize');
@@ -150,6 +180,11 @@ function setupEventListeners() {
         updateUI();
     });
 
+    elOdd.addEventListener('input', (e) => {
+        elOddVal.textContent = e.target.value;
+        updateUI();
+    });
+
     elDetectorMode.addEventListener('change', (e) => {
         currentDetectorKey = e.target.value;
         updateUI();
@@ -194,13 +229,30 @@ function updateSystemBounds() {
     const sys = SYSTEMS[currentSystemName];
     elSod.min = sys.MIN_SOD;
     elSod.max = sys.MAX_SOD;
-    elSdd.min = sys.MIN_SDD;
-    elSdd.max = sys.MAX_SDD;
+    elSdd.min = sys.MIN_SDD || 0;
+    elSdd.max = sys.MAX_SDD || 2000;
     // Ensure values are within new bounds
     if (parseFloat(elSod.value) < sys.MIN_SOD) elSod.value = sys.MIN_SOD;
     if (parseFloat(elSod.value) > sys.MAX_SOD) elSod.value = sys.MAX_SOD;
     if (parseFloat(elSdd.value) < sys.MIN_SDD) elSdd.value = sys.MIN_SDD;
     if (parseFloat(elSdd.value) > sys.MAX_SDD) elSdd.value = sys.MAX_SDD;
+
+    // ODD Bounds
+    if (sys.inputMode === 'ODD') {
+        elOdd.min = sys.MIN_ODD;
+        elOdd.max = sys.MAX_ODD;
+        if (parseFloat(elOdd.value) < sys.MIN_ODD) elOdd.value = sys.MIN_ODD;
+        if (parseFloat(elOdd.value) > sys.MAX_ODD) elOdd.value = sys.MAX_ODD;
+
+        elGroupSdd.style.display = 'none';
+        elGroupOdd.style.display = 'block';
+    } else {
+        elGroupSdd.style.display = 'block';
+        elGroupOdd.style.display = 'none';
+
+        // Reset SDD to max if switching back? Or keep?
+        // Let's leave it.
+    }
 
     // Update defaults for table gen?
     elTableMin.value = sys.MIN_SOD;
@@ -350,32 +402,52 @@ function updateUI() {
     let sdd = parseFloat(elSdd.value);
     const sys = SYSTEMS[currentSystemName];
 
-    elSodVal.textContent = sod;
-    elSddVal.textContent = sdd;
+    // Handle ODD Mode
+    if (sys.inputMode === 'ODD') {
+        let odd = parseFloat(elOdd.value);
+        sdd = sod + odd;
 
-    // 1. Calculate Max Diameter first as it determines constraint
-    let maxDiameterPre = 2 * (sod - sys.FOD) - 2 * sys.SAFETY;
-    if (maxDiameterPre < 0) maxDiameterPre = 0;
-
-    // 2. Enforce SDD Constraint
-    // SDD >= SOD + (MaxDiameter / 2)
-    const minSddConstraint = sod + (maxDiameterPre / 2);
-    const effectiveMinSdd = Math.max(sys.MIN_SDD, minSddConstraint);
-
-    // Update SDD Slider Min only if constraint is higher than hardware min?
-    // Actually standard input range behavior is simple min/max.
-    // If we dynamically change min, the slider moves. 
-    // Let's just enforce value.
-
-    let constraintActive = false;
-    if (sdd < effectiveMinSdd) {
-        sdd = effectiveMinSdd;
-        elSdd.value = sdd;
-        elSddVal.textContent = Math.round(sdd);
-        constraintActive = true;
+        // Update display logic for SDD hidden, but we might want to show calculated SDD?
+        // User didn't ask, but it's useful. But for now just use it for calc.
+        // Update slider display
+        elOddVal.textContent = odd;
+    } else {
+        elSddVal.textContent = sdd;
     }
 
-    elSddMsg.style.display = constraintActive ? 'block' : 'none';
+    elSodVal.textContent = sod;
+
+    // 1. Calculate Max Diameter first as it determines constraint
+    // For DynaTOM, is safety 0?
+    const safety = sys.SAFETY || 0;
+    let maxDiameterPre = 2 * (sod - sys.FOD) - 2 * safety;
+    if (maxDiameterPre < 0) maxDiameterPre = 0;
+
+    // 2. Enforce SDD Constraint (Only for normal SDD mode?)
+    // For ODD mode, ODD is independent? 
+    // "SDD is then SOD + ODD". 
+    // And user says "ODD can be changed from 117 to 580". 
+    // Constraint check: SDD >= SOD + MaxDia/2 ?
+    // If ODD is fixed by slider, does it violate collision?
+    // User didn't specify collision constraints for DynaTOM.
+    // CoreTOM has SDD constraints.
+    // Let's assume DynaTOM ODD ranges are safe.
+
+    if (sys.inputMode !== 'ODD') {
+        const minSddConstraint = sod + (maxDiameterPre / 2);
+        const effectiveMinSdd = Math.max(sys.MIN_SDD, minSddConstraint);
+        // ... (existing constraint logic)
+        let constraintActive = false;
+        if (sdd < effectiveMinSdd) {
+            sdd = effectiveMinSdd;
+            elSdd.value = sdd;
+            elSddVal.textContent = Math.round(sdd);
+            constraintActive = true;
+        }
+        elSddMsg.style.display = constraintActive ? 'block' : 'none';
+    } else {
+        elSddMsg.style.display = 'none';
+    }
 
     // 3. Compute Final Metrics
     const metrics = calculateMetrics(sod, sdd, currentSystemName, currentDetectorKey, currentBinning);
@@ -399,6 +471,10 @@ function generateTable() {
     const sys = SYSTEMS[currentSystemName];
 
     let targetSdd = parseFloat(elSdd.value);
+    let fixedOdd = 0;
+    if (sys.inputMode === 'ODD') {
+        fixedOdd = parseFloat(elOdd.value);
+    }
 
     const chartData = [];
 
@@ -408,9 +484,16 @@ function generateTable() {
         let rowMaxDia = 2 * (s - sys.FOD) - 2 * sys.SAFETY;
         if (rowMaxDia < 0) rowMaxDia = 0;
 
-        let rowMinSdd = s + (rowMaxDia / 2);
-        let rowSdd = Math.max(targetSdd, rowMinSdd);
-        if (rowSdd > sys.MAX_SDD) rowSdd = sys.MAX_SDD;
+        let rowSdd = 0;
+
+        if (sys.inputMode === 'ODD') {
+            // Keep ODD fixed
+            rowSdd = s + fixedOdd;
+        } else {
+            let rowMinSdd = s + (rowMaxDia / 2);
+            rowSdd = Math.max(targetSdd, rowMinSdd);
+            if (rowSdd > sys.MAX_SDD) rowSdd = sys.MAX_SDD;
+        }
 
         const m = calculateMetrics(s, rowSdd, currentSystemName, currentDetectorKey, currentBinning);
 
